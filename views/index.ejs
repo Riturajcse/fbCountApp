@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html ng-app="app">
+  <head>
+    <title><%= title %></title>
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+  </head>
+  <body>
+    <h1><%= title %></h1>
+
+    <ng-view></ng-view>
+
+    <!-- Libraries -->
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.25/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.25/angular-route.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.25/angular-resource.min.js"></script>
+
+    <!-- Template -->
+    <script type="text/ng-template" id="/Login.html">
+      <button ng-click="FBLogin()">FBLogin</button>
+    </script>
+
+    <script type="text/ng-template" id="/Profile.html">
+      <h1>{{userName}}</h1>
+      count: {{userCount}}<br>
+      <img src={{pic}}></img>
+      </br>
+      <button ng-click="FBLogout()">FBLogout</button>
+    </script>
+
+
+    <script>
+      angular.module('app', ['ngRoute', 'ngResource'])
+
+        // Services
+
+        .factory('loginCount', ['$resource', function($resource){
+          return $resource('/count/:id', null, {
+            'update': { method:'PUT' }
+          });
+        }])
+
+        // Controllers
+
+        .controller('LoginCtrl', ['$scope', 'loginCount', '$location', function ($scope, loginCount, $location) {
+          $scope.allUsers = loginCount.query();
+          $scope.FBLogin = function() {
+            FB.login(function(response) {
+              if (response.authResponse) {
+               FB.api('/me', function(response) {
+                 var img = 'http://graph.facebook.com/' + response.id + '/picture?type=normal';
+                 $scope.name = response.name;
+                 var count = 1;
+                 var exists = false;
+                 for (var i = $scope.allUsers.length - 1; i >= 0; i--) {
+                   if ($scope.allUsers[i].name === $scope.name) {
+                    $scope.updateUser(i);
+                    $scope.allUsers[i].count += 1;
+                    count = $scope.allUsers[i].count;
+                    exists = true;
+                  }
+                 }
+                 if(!exists)
+                  $scope.saveUser();
+                $location.path('/profile').search({name: response.name, pic: img, count: count, auth: response.authResponse});
+               });
+              } else {
+               console.log('User did not authorize.');
+              }
+            },{scope: 'public_profile'});
+          }
+
+          $scope.saveUser = function(){
+            var user = new loginCount({ name: $scope.name, count: 1 });
+
+            user.$save(function(){
+            });
+          }
+
+          $scope.updateUser = function(index){
+            var currentUser = $scope.allUsers[index];
+            loginCount.update({id: currentUser._id}, currentUser);
+          }
+        }])
+
+        .controller('ProfileCtrl', ['$scope', '$routeParams', 'loginCount', '$location', function ($scope, $routeParams, loginCount, $location) {
+          $scope.userName = $location.search().name;
+          $scope.userCount = $location.search().count;
+          $scope.pic= $location.search().pic;
+          var authResponse = $location.search().auth;
+          $scope.FBLogout = function() {
+            FB.logout(authResponse);
+            $location.search({});
+            $location.replace('/');
+            $location.path('/');
+          }
+        }])
+
+        // Routes
+
+        .config(['$routeProvider', function ($routeProvider) {
+          $routeProvider
+            .when('/', {
+              templateUrl: '/Login.html',
+              controller: 'LoginCtrl'
+            })
+
+            .when('/profile', {
+              templateUrl: '/Profile.html',
+              controller: 'ProfileCtrl'
+           });
+        }]);
+
+        //FB JDK
+
+        window.fbAsyncInit = function() {
+          FB.init({
+            appId      : '1669964286636341',
+            xfbml      : true,
+            version    : 'v2.8'
+          });
+          FB.AppEvents.logPageView();
+        };
+
+        (function(d, s, id){
+           var js, fjs = d.getElementsByTagName(s)[0];
+           if (d.getElementById(id)) {return;}
+           js = d.createElement(s); js.id = id;
+           js.src = "//connect.facebook.net/en_US/sdk.js";
+           fjs.parentNode.insertBefore(js, fjs);
+         }(document, 'script', 'facebook-jssdk'));
+    </script>
+  </body>
+</html>
