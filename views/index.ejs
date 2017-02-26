@@ -13,6 +13,7 @@
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.25/angular.min.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.25/angular-route.min.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.25/angular-resource.min.js"></script>
+     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.25/angular-cookies.min.js"></script>
 
     <!-- Template -->
     <script type="text/ng-template" id="/Login.html">
@@ -20,16 +21,22 @@
     </script>
 
     <script type="text/ng-template" id="/Profile.html">
-      <h1>{{userName}}</h1>
-      count: {{userCount}}<br>
-      <img src={{pic}}></img>
-      </br>
-      <button ng-click="FBLogout()">FBLogout</button>
+      <div ng-if="loggedIn">
+        <h2>{{userName}}</h2>
+        count: {{userCount}}<br>
+        <img ng-src={{pic}}></img>
+        </br>
+        <button ng-click="FBLogout()">FBLogout</button>
+      </div>
+      <div ng-if="!loggedIn">
+        You are not logged in. </br>
+        <a href="/">Login</a>
+      </div>
     </script>
 
 
     <script>
-      angular.module('app', ['ngRoute', 'ngResource'])
+      angular.module('app', ['ngRoute', 'ngResource', 'ngCookies'])
 
         // Services
 
@@ -41,57 +48,71 @@
 
         // Controllers
 
-        .controller('LoginCtrl', ['$scope', 'loginCount', '$location', function ($scope, loginCount, $location) {
+        .controller('LoginCtrl', ['$scope', 'loginCount', '$location', '$cookieStore', function ($scope, loginCount, $location, $cookieStore) {
           $scope.allUsers = loginCount.query();
           $scope.FBLogin = function() {
             FB.login(function(response) {
               if (response.authResponse) {
-               FB.api('/me', function(response) {
-                 var img = 'http://graph.facebook.com/' + response.id + '/picture?type=normal';
-                 $scope.name = response.name;
-                 var count = 1;
-                 var exists = false;
-                 for (var i = $scope.allUsers.length - 1; i >= 0; i--) {
-                   if ($scope.allUsers[i].name === $scope.name) {
-                    $scope.updateUser(i);
-                    $scope.allUsers[i].count += 1;
-                    count = $scope.allUsers[i].count;
-                    exists = true;
+                FB.api('/me', function(response) {
+                  var img = 'http://graph.facebook.com/' + response.id + '/picture?type=normal';
+                  $scope.name = response.name;
+                  var count = 1;
+                  var exists = false;
+                  for (var i = $scope.allUsers.length - 1; i >= 0; i--) {
+                    if ($scope.allUsers[i].name === $scope.name) {
+                      updateUser(i);
+                      $scope.allUsers[i].count += 1;
+                      count = $scope.allUsers[i].count;
+                      exists = true;
+                    }
                   }
-                 }
-                 if(!exists)
-                  $scope.saveUser();
-                $location.path('/profile').search({name: response.name, pic: img, count: count, auth: response.authResponse});
-               });
+                  if(!exists)
+                    saveUser();
+                  var userData = {
+                    name: response.name,
+                    pic : img,
+                    count: count,
+                    id: response.id,
+                    auth: response.authResponse
+                  }
+                  $cookieStore.put('loggedInUserData', userData);
+                  $location.path('/profile');
+                });
               } else {
                console.log('User did not authorize.');
               }
             },{scope: 'public_profile'});
           }
 
-          $scope.saveUser = function(){
+          function saveUser() {
             var user = new loginCount({ name: $scope.name, count: 1 });
 
             user.$save(function(){
             });
           }
 
-          $scope.updateUser = function(index){
+          function updateUser(index) {
             var currentUser = $scope.allUsers[index];
             loginCount.update({id: currentUser._id}, currentUser);
           }
         }])
 
-        .controller('ProfileCtrl', ['$scope', '$routeParams', 'loginCount', '$location', function ($scope, $routeParams, loginCount, $location) {
-          $scope.userName = $location.search().name;
-          $scope.userCount = $location.search().count;
-          $scope.pic= $location.search().pic;
-          var authResponse = $location.search().auth;
-          $scope.FBLogout = function() {
-            FB.logout(authResponse);
-            $location.search({});
-            $location.replace('/');
-            $location.path('/');
+        .controller('ProfileCtrl', ['$scope', '$routeParams', 'loginCount', '$location', '$cookieStore', function ($scope, $routeParams, loginCount, $location, $cookieStore) {
+          var resId = $cookieStore.get("loggedInUserData");
+          if (!resId)
+            $scope.loggedIn = false;
+          else {
+            $scope.loggedIn = true;
+            $scope.userName = resId.name;
+            $scope.userCount = resId.count;
+            $scope.pic= resId.pic;
+            var authResponse = resId.auth;
+            $scope.FBLogout = function() {
+              FB.logout(authResponse);
+              $cookieStore.put('loggedInUserData', null);
+              $location.replace('/');
+              $location.path('/');
+            }
           }
         }])
 
