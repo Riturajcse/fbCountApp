@@ -15,7 +15,7 @@ var mongoose = require('mongoose');
 mongoose.Promise = global.Promise;
 
 // connect to MongoDB
-mongoose.connect('mongodb://rituraj2:mongolab123@ds011963.mlab.com:11963/mychat_rr');
+mongoose.connect('mongodb:/***');
 
 var app = express();
 
